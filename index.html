@@ -5,76 +5,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BactoScan - Modern Lab Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap');
-        
         body { font-family: 'Inter', 'Noto Sans Thai', sans-serif; background-color: #f8fafc; }
         .page { display: none; opacity: 0; transition: opacity 0.3s ease-in-out; }
         .page.active { display: block; opacity: 1; }
-        
-        /* สไตล์ Modal เอฟเฟกต์กระจกฝ้า */
-        .modal-overlay { display: none; align-items: center; justify-content: center; position: fixed; inset: 0; z-index: 100; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); }
+        .modal-overlay { display: none; align-items: center; justify-content: center; position: fixed; inset: 0; z-index: 100; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(8px); }
         .modal-overlay.active { display: flex; animation: fadeIn 0.2s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        
-        /* เอฟเฟกต์สั่นเมื่อใส่รหัสผิด */
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
-            20%, 40%, 60%, 80% { transform: translateX(8px); }
-        }
-        .animate-shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
-        
-        /* เอฟเฟกต์เลเซอร์สแกน */
-        @keyframes scanline {
-            0% { top: 0; opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 1; }
-            100% { top: 100%; opacity: 0; }
-        }
-        .laser-scanner {
-            position: absolute; left: 0; width: 100%; height: 3px; background: #10b981;
-            box-shadow: 0 0 15px 2px rgba(16, 185, 129, 0.7);
-            animation: scanline 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-            z-index: 10; display: none;
-        }
+        @keyframes scanline { 0% { top: 0; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+        .laser-scanner { position: absolute; left: 0; width: 100%; height: 3px; background: #10b981; box-shadow: 0 0 15px 2px rgba(16, 185, 129, 0.7); animation: scanline 2s cubic-bezier(0.4, 0, 0.2, 1) infinite; z-index: 10; display: none; }
         .scanning .laser-scanner { display: block; }
         .scanning img { filter: contrast(1.2) brightness(0.9) sepia(0.2) hue-rotate(90deg); transition: filter 0.5s; }
+        
+        /* ซ่อน Scrollbar สำหรับเนื้อหาใน Modal */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="flex h-screen overflow-hidden text-slate-800 relative">
 
     <div id="security-alert" class="absolute top-0 left-0 w-full bg-rose-600 text-white px-8 py-4 z-[200] flex justify-between items-center transition-transform duration-500 -translate-y-full shadow-2xl">
         <div class="flex items-center gap-4">
-            <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center animate-pulse">
-                <span class="text-2xl">🚨</span>
-            </div>
+            <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center animate-pulse"><span class="text-2xl">🚨</span></div>
             <div>
                 <h4 class="font-black text-lg tracking-widest">SECURITY ALERT: SYSTEM LOCKED</h4>
-                <p class="text-sm font-medium text-rose-100">ตรวจพบการระบุรหัสผ่านผิดเกิน 5 ครั้ง ระบบถูกล็อก! ต้องใช้รหัสผ่านระดับสูงเพื่อทำการลบข้อมูลต่อไป</p>
+                <p class="text-sm font-medium text-rose-100">ตรวจพบการระบุรหัสผ่านผิดเกิน 5 ครั้ง ระบบถูกล็อก! ต้องใช้รหัสผ่านระดับสูงเพื่อลบข้อมูล</p>
             </div>
         </div>
-        <button onclick="dismissSecurityAlert()" class="bg-black/20 hover:bg-black/40 px-6 py-2 rounded-xl text-sm font-bold transition-colors border border-white/10">รับทราบ</button>
+        <button onclick="dismissSecurityAlert()" class="bg-black/20 px-6 py-2 rounded-xl text-sm font-bold border border-white/10">รับทราบ</button>
     </div>
 
-    <aside class="w-72 bg-white border-r border-slate-100 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20 relative">
+    <aside class="w-72 bg-white border-r border-slate-100 flex flex-col shadow-sm z-20 relative">
         <div class="p-8 flex items-center gap-3 border-b border-slate-50">
-            <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-emerald-200">🔬</div>
+            <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-xl flex items-center justify-center text-white font-bold text-xl">🔬</div>
             <div>
                 <h1 class="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-500">BactoScan</h1>
-                <p class="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Pro Edition</p>
+                <p class="text-[10px] uppercase tracking-widest text-emerald-600 font-bold">Cloud Synced</p>
             </div>
         </div>
-
         <nav class="flex-1 p-4 space-y-2 mt-4">
             <p class="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Main Menu</p>
             <button onclick="showPage('history')" id="nav-history" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm bg-emerald-50 text-emerald-700 font-bold">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                History Dashboard
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg> History Dashboard
             </button>
-            <button onclick="showPage('scanner')" id="nav-scanner" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-800">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                AI Micro-Scanner
+            <button onclick="showPage('scanner')" id="nav-scanner" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm text-slate-500 hover:bg-slate-50">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg> AI Micro-Scanner
             </button>
         </nav>
     </aside>
@@ -84,7 +64,7 @@
             <h2 id="page-title" class="text-xl font-bold text-slate-800">History Dashboard</h2>
             <div class="flex items-center gap-4">
                 <span class="flex items-center gap-2 text-xs font-bold text-slate-500 bg-white px-3 py-1.5 rounded-full shadow-sm border border-slate-100">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> SYSTEM ONLINE
+                    <span id="sync-dot" class="w-2 h-2 rounded-full bg-emerald-500"></span> <span id="sync-text">DATABASE ACTIVE</span>
                 </span>
             </div>
         </header>
@@ -93,66 +73,50 @@
             <div id="page-history" class="page active max-w-7xl mx-auto">
                 <div class="flex justify-between items-end mb-8">
                     <div>
-                        <p class="text-slate-500 text-sm mb-1">ผลการวิเคราะห์ล่าสุดจาก BactoAI</p>
-                        <h3 class="text-3xl font-bold tracking-tight">Recent Scans</h3>
+                        <p class="text-slate-500 text-sm mb-1">ผลวิเคราะห์บันทึกในระบบคลาวด์</p>
+                        <h3 class="text-3xl font-bold tracking-tight">Cloud Records</h3>
                     </div>
                     <div class="text-right">
                         <span id="scan-count" class="text-4xl font-black text-slate-800 tracking-tighter">0</span>
                         <p class="text-[10px] text-slate-400 uppercase font-bold tracking-widest mt-1">Total Records</p>
                     </div>
                 </div>
-
-                <div id="history-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    <div id="empty-msg" class="col-span-full py-32 flex flex-col items-center justify-center text-slate-400 bg-white/40 rounded-3xl border border-dashed border-slate-200">
-                        <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
-                            <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                        </div>
-                        <p class="font-bold uppercase tracking-widest text-sm">No Scans Found</p>
-                    </div>
-                </div>
+                <div id="history-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
             </div>
 
             <div id="page-scanner" class="page max-w-5xl mx-auto">
-                <div id="upload-section">
-                    <div class="bg-white p-1 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100/50">
-                        <div class="p-10 text-center border-b border-slate-50">
-                            <h2 class="text-3xl font-bold tracking-tight mb-2">AI Image Scanner</h2>
-                        </div>
-                        <div class="p-10">
-                            <div id="image-container" class="relative group border-2 border-dashed border-slate-300 rounded-3xl p-2 text-center cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/50 transition-all duration-300 overflow-hidden bg-slate-50" onclick="if(!isScanning) document.getElementById('file-input').click()">
-                                <input type="file" id="file-input" class="hidden" accept="image/*" onchange="handleFile(event)">
-                                <div class="laser-scanner"></div>
-                                <div id="upload-ui" class="py-20">
-                                    <div class="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100 group-hover:scale-110 transition-transform">
-                                        <svg class="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                                    </div>
-                                    <p class="font-bold text-slate-700 text-lg">ลากภาพมาวาง หรือคลิกเพื่ออัปโหลด</p>
-                                </div>
-                                <img id="preview-img" class="hidden w-full max-h-[400px] object-contain rounded-2xl mx-auto z-0 relative">
+                <div id="upload-section" class="bg-white p-1 rounded-3xl shadow-sm border border-slate-100/50">
+                    <div class="p-10 text-center border-b border-slate-50"><h2 class="text-3xl font-bold">AI Image Scanner</h2></div>
+                    <div class="p-10">
+                        <div id="image-container" class="relative border-2 border-dashed border-slate-300 rounded-3xl p-2 text-center cursor-pointer hover:bg-emerald-50/50 transition-all bg-slate-50" onclick="if(!isScanning) document.getElementById('file-input').click()">
+                            <input type="file" id="file-input" class="hidden" accept="image/*" onchange="handleFile(event)">
+                            <div class="laser-scanner"></div>
+                            <div id="upload-ui" class="py-20">
+                                <p class="font-bold text-slate-700 text-lg">คลิกเพื่ออัปโหลดภาพแบคทีเรีย</p>
                             </div>
-                            <button id="analyze-btn" onclick="startScanning()" disabled class="w-full mt-8 bg-slate-900 text-white py-5 rounded-2xl font-bold text-lg hover:bg-emerald-600 hover:shadow-lg hover:shadow-emerald-200 transition-all duration-300 disabled:opacity-20 disabled:cursor-not-allowed">
-                                เริ่มกระบวนการวิเคราะห์ (INITIATE SCAN)
-                            </button>
+                            <img id="preview-img" class="hidden w-full max-h-[400px] object-contain rounded-2xl mx-auto z-0 relative">
                         </div>
+                        <button id="analyze-btn" onclick="startScanning()" disabled class="w-full mt-8 bg-slate-900 text-white py-5 rounded-2xl font-bold text-lg disabled:opacity-20 transition-all">เริ่มวิเคราะห์ (INITIATE SCAN)</button>
                     </div>
                 </div>
 
-                <div id="result-section" class="hidden">
-                    <div class="bg-white rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-slate-100 overflow-hidden">
-                        <div class="flex flex-col lg:flex-row">
-                            <div class="lg:w-1/2 bg-slate-50 p-8 flex items-center justify-center border-r border-slate-100 relative">
-                                <img id="live-result-img" class="w-full max-h-[500px] object-cover rounded-2xl shadow-md border-4 border-white">
+                <div id="result-section" class="hidden bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="flex flex-col lg:flex-row">
+                        <div class="lg:w-1/2 bg-slate-50 p-8 border-r border-slate-100"><img id="live-result-img" class="w-full rounded-2xl shadow-md border-4 border-white"></div>
+                        <div class="lg:w-1/2 p-10 flex flex-col justify-between">
+                            <div>
+                                <h3 id="live-result-name" class="text-4xl font-black italic mb-2"></h3>
+                                <div class="mb-6"><span id="live-result-risk" class="px-3 py-1 rounded text-[11px] font-black tracking-widest"></span></div>
+                                <p id="live-result-detail" class="text-slate-600 mb-6 font-medium"></p>
+                                
+                                <div class="space-y-3 mb-8">
+                                    <div class="bg-rose-50/50 p-3 rounded-xl border border-rose-100"><p class="text-xs font-bold text-rose-800 mb-1">อาการ:</p><p id="live-result-symptoms" class="text-xs text-rose-600 line-clamp-2"></p></div>
+                                    <div class="bg-blue-50/50 p-3 rounded-xl border border-blue-100"><p class="text-xs font-bold text-blue-800 mb-1">การรักษา:</p><p id="live-result-treatment" class="text-xs text-blue-600 line-clamp-2"></p></div>
+                                </div>
                             </div>
-                            <div class="lg:w-1/2 p-10 flex flex-col justify-between bg-white relative">
-                                <div>
-                                    <h3 id="live-result-name" class="text-4xl font-black text-slate-800 tracking-tight italic mb-2"></h3>
-                                    <div class="mb-8"><span id="live-result-risk" class="px-3 py-1 rounded text-[11px] font-black tracking-widest"></span></div>
-                                    <p id="live-result-detail" class="text-slate-600 leading-relaxed text-lg mb-8"></p>
-                                </div>
-                                <div class="space-y-3">
-                                    <button onclick="saveAndAcknowledge()" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200/50">จัดเก็บลงฐานข้อมูล</button>
-                                    <button onclick="discardAndRetry()" class="w-full bg-slate-50 text-slate-500 py-4 rounded-xl font-bold hover:bg-slate-100 hover:text-slate-800 transition-all">ยกเลิก (Discard)</button>
-                                </div>
+                            <div class="space-y-3">
+                                <button onclick="saveResult()" id="btn-save" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-bold transition-all">บันทึกผลการสแกน</button>
+                                <button onclick="discardAndRetry()" class="w-full bg-slate-50 hover:bg-slate-100 text-slate-500 py-4 rounded-xl font-bold transition-all">ยกเลิก</button>
                             </div>
                         </div>
                     </div>
@@ -161,72 +125,285 @@
         </div>
     </main>
 
-    <div id="duplicate-modal" class="modal-overlay" onclick="closeModal('duplicate-modal')">
-        <div class="bg-white w-full max-w-sm mx-4 rounded-[2rem] shadow-2xl p-8 relative text-center" onclick="event.stopPropagation()">
-            <div class="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-5 border-4 border-amber-100">
-                <svg class="w-10 h-10 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+    <div id="detail-modal" class="modal-overlay" onclick="closeModal('detail-modal')">
+        <div class="bg-white w-full max-w-2xl mx-4 rounded-[2rem] overflow-hidden flex flex-col max-h-[90vh] shadow-2xl" onclick="event.stopPropagation()">
+            <div class="h-64 bg-slate-100 relative">
+                <img id="modal-img" src="" class="w-full h-full object-cover">
+                <button onclick="closeModal('detail-modal')" class="absolute top-4 right-4 bg-black/40 hover:bg-black/70 text-white p-2.5 rounded-full transition-all backdrop-blur-md">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
             </div>
-            <h3 class="text-2xl font-black text-slate-800 tracking-tight mb-2">ตรวจพบภาพซ้ำ!</h3>
-            <p class="text-slate-500 text-sm mb-8 leading-relaxed">ภาพนี้ถูกวิเคราะห์และจัดเก็บลงในฐานข้อมูลเรียบร้อยแล้ว กรุณาไปที่หน้าประวัติเพื่อดูผลลัพธ์</p>
-            
-            <div class="flex flex-col gap-3">
-                <button onclick="goToHistoryFromDuplicate()" class="w-full bg-amber-500 text-white py-3.5 rounded-xl font-bold hover:bg-amber-600 shadow-lg shadow-amber-200 transition-all">ดูประวัติการวิเคราะห์</button>
-                <button onclick="closeModal('duplicate-modal'); resetScannerUI();" class="w-full bg-slate-50 text-slate-600 py-3.5 rounded-xl font-bold hover:bg-slate-100 transition-all">อัปโหลดภาพใหม่</button>
+            <div class="p-8 overflow-y-auto no-scrollbar">
+                <div class="flex items-center gap-3 mb-4">
+                    <span id="modal-risk" class="px-3 py-1 rounded-md text-xs font-black uppercase tracking-widest"></span>
+                    <span class="text-xs text-slate-400 font-bold tracking-widest uppercase">Scanned Record</span>
+                </div>
+                <h3 id="modal-name" class="text-3xl font-black italic text-slate-800 mb-3"></h3>
+                <p id="modal-detail" class="text-slate-600 mb-8 leading-relaxed font-medium"></p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-rose-50 rounded-2xl p-5 border border-rose-100">
+                        <h4 class="text-rose-800 font-bold mb-2 flex items-center gap-2"><span>🤒</span> อาการที่พบ</h4>
+                        <p id="modal-symptoms" class="text-sm text-rose-700/90 leading-relaxed"></p>
+                    </div>
+                    <div class="bg-blue-50 rounded-2xl p-5 border border-blue-100">
+                        <h4 class="text-blue-800 font-bold mb-2 flex items-center gap-2"><span>💊</span> การรักษาเบื้องต้น</h4>
+                        <p id="modal-treatment" class="text-sm text-blue-700/90 leading-relaxed"></p>
+                    </div>
+                    <div class="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 md:col-span-2 mt-2">
+                        <h4 class="text-emerald-800 font-bold mb-2 flex items-center gap-2"><span>🛡️</span> แนวทางการป้องกัน</h4>
+                        <p id="modal-prevention" class="text-sm text-emerald-700/90 leading-relaxed"></p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <div id="delete-modal" class="modal-overlay" onclick="closeModal('delete-modal')">
-        <div id="delete-modal-box" class="bg-white w-full max-w-md mx-4 rounded-3xl shadow-2xl p-8 relative transition-all" onclick="event.stopPropagation()">
-            <div id="delete-icon-bg" class="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4 transition-colors">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-            </div>
-            
-            <h3 id="delete-title" class="text-2xl font-bold text-center text-slate-800 mb-2">ลบข้อมูลประวัติ?</h3>
-            <p id="delete-subtitle" class="text-center text-slate-500 text-sm mb-6">กรุณาใส่รหัสผ่านผู้ใช้งานเพื่อยืนยันการลบข้อมูล</p>
-            
-            <input type="password" id="delete-password" autocomplete="off" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-center text-lg font-bold text-slate-700 focus:outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 transition-all mb-2">
-            
+        <div id="delete-modal-box" class="bg-white w-full max-w-md mx-4 rounded-3xl p-8" onclick="event.stopPropagation()">
+            <h3 id="delete-title" class="text-2xl font-bold text-center mb-2">ลบข้อมูล?</h3>
+            <p id="delete-subtitle" class="text-center text-slate-500 text-sm mb-6">ใส่รหัสผ่านเพื่อยืนยันการลบ</p>
+            <input type="password" id="delete-password" autocomplete="off" class="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 outline-none rounded-xl px-4 py-3 text-center text-lg font-bold mb-2 transition-all">
             <p id="delete-error" class="text-rose-500 text-xs font-bold text-center mb-6 hidden"></p>
-            
             <div class="flex gap-3 mt-4">
-                <button onclick="closeModal('delete-modal')" class="w-1/2 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-all">ยกเลิก</button>
-                <button onclick="confirmDelete()" id="btn-confirm-delete" class="w-1/2 bg-rose-600 text-white py-3 rounded-xl font-bold hover:bg-rose-700 shadow-lg shadow-rose-200 transition-all">ยืนยันการลบ</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="details-modal" class="modal-overlay" onclick="closeModal('details-modal')">
-        <div class="bg-white w-full max-w-3xl mx-4 rounded-[2rem] shadow-2xl overflow-hidden relative" onclick="event.stopPropagation()">
-            <button onclick="closeModal('details-modal')" class="absolute top-6 right-6 bg-white/50 backdrop-blur hover:bg-white text-slate-800 w-10 h-10 rounded-full flex items-center justify-center transition-all z-20 border border-slate-200">✕</button>
-            <div class="flex flex-col md:flex-row h-full">
-                <div class="md:w-2/5 relative bg-slate-100">
-                    <img id="modal-img" class="absolute inset-0 w-full h-full object-cover">
-                </div>
-                <div class="md:w-3/5 p-10 flex flex-col justify-center">
-                    <span id="modal-risk" class="self-start px-3 py-1 rounded-md text-[10px] font-black tracking-widest mb-4"></span>
-                    <h3 id="modal-name" class="text-3xl font-black text-slate-800 tracking-tight italic mb-4"></h3>
-                    <p id="modal-detail" class="text-slate-600 leading-relaxed mb-8"></p>
-                </div>
+                <button onclick="closeModal('delete-modal')" class="w-1/2 bg-slate-100 hover:bg-slate-200 py-3 rounded-xl font-bold transition-all">ยกเลิก</button>
+                <button onclick="confirmDelete()" id="btn-confirm-delete" class="w-1/2 bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-bold transition-all">ยืนยัน</button>
             </div>
         </div>
     </div>
 
     <script>
+        // 1. ตั้งค่า Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyBieLOKu1yKct2EcVSOvyS4facF8aTsJAc",
+            authDomain: "bactoscan-app.firebaseapp.com",
+            projectId: "bactoscan-app",
+            storageBucket: "bactoscan-app.firebasestorage.app",
+            messagingSenderId: "29696331301",
+            appId: "1:29696331301:web:d9dc98a574375a6f38f9cc",
+            measurementId: "G-C6JRVVZCJ8"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // 2. ข้อมูลเชื้อโรค (อัปเกรดให้ละเอียดขึ้นแบบสุดๆ)
         const pathogens = [
-            { name: "Escherichia coli", detail: "แบคทีเรียแกรมลบรูปแท่ง พบในการปนเปื้อนของแหล่งน้ำและอาหารดิบ", risk: "WARNING" },
-            { name: "Salmonella spp.", detail: "ก่อให้เกิดโรคอาหารเป็นพิษและไข้ไทฟอยด์", risk: "CRITICAL" }
+            { 
+                name: "Escherichia coli (E. coli)", 
+                detail: "แบคทีเรียแกรมลบรูปแท่ง มักพบในลำไส้ของคนและสัตว์เลือดอุ่น บางสายพันธุ์ก่อให้เกิดโรคอาหารเป็นพิษรุนแรง", 
+                risk: "WARNING",
+                symptoms: "ปวดท้องบิดรุนแรง, ท้องเสีย (อาจมีเลือดปน), อาเจียน, และมีไข้ต่ำๆ",
+                treatment: "ดื่มน้ำเกลือแร่ทดแทนภาวะขาดน้ำ หากอาการรุนแรงหรือติดเชื้อในกระแสเลือดต้องใช้ยาปฏิชีวนะตามแพทย์สั่ง",
+                prevention: "ปรุงเนื้อสัตว์ให้สุกทั่วถึง ล้างผักผลไม้ให้สะอาด ล้างมือด้วยสบู่ก่อนทานอาหารทุกครั้ง"
+            },
+            { 
+                name: "Salmonella spp.", 
+                detail: "แบคทีเรียที่ก่อให้เกิดโรคอาหารเป็นพิษและไข้ไทฟอยด์ มักปนเปื้อนในเนื้อไก่ ไข่ดิบ และผลิตภัณฑ์นม", 
+                risk: "CRITICAL",
+                symptoms: "มีไข้สูง, ปวดมวนท้อง, ท้องเสียรุนแรง, คลื่นไส้, อาเจียนเฉียบพลัน",
+                treatment: "การรักษาตามอาการ จิบน้ำเกลือแร่ หากผู้ป่วยเป็นเด็กเล็กหรือผู้สูงอายุอาจต้องรับยาฆ่าเชื้อผ่านทางสายน้ำเกลือ",
+                prevention: "หลีกเลี่ยงการบริโภคไข่ดิบ หรือเนื้อสัตว์กึ่งสุกกึ่งดิบ แยกเขียงสำหรับหั่นของสุกและของดิบอย่างชัดเจน"
+            },
+            { 
+                name: "Staphylococcus aureus", 
+                detail: "แบคทีเรียแกรมบวก พบได้ทั่วไปตามผิวหนังและโพรงจมูก สามารถสร้างสารพิษ (Toxin) ที่ทนความร้อนได้", 
+                risk: "CRITICAL",
+                symptoms: "คลื่นไส้อย่างรุนแรง อาเจียน ปวดท้อง และท้องเสีย มักเกิดอาการอย่างรวดเร็วภายใน 1-6 ชั่วโมงหลังรับเชื้อ",
+                treatment: "รักษาประคับประคองตามอาการ สารพิษไม่ตอบสนองต่อยาปฏิชีวนะ เน้นการให้น้ำและเกลือแร่ทดแทน",
+                prevention: "ผู้ประกอบอาหารที่มีบาดแผลที่มือไม่ควรสัมผัสอาหารโดยตรง ไม่ทิ้งอาหารปรุงสุกไว้ที่อุณหภูมิห้องนานเกิน 2 ชั่วโมง"
+            },
+            { 
+                name: "Lactobacillus", 
+                detail: "แบคทีเรียชนิดดี (Probiotics) พบในอาหารหมักดอง เช่น โยเกิร์ต นมเปรี้ยว และกิมจิ ช่วยปรับสมดุลลำไส้", 
+                risk: "SAFE",
+                symptoms: "ไม่ก่อให้เกิดโรค (ตรงกันข้าม ช่วยลดอาการท้องผูกและท้องเสียจากการติดเชื้ออื่นๆ)",
+                treatment: "ไม่จำเป็นต้องรักษา",
+                prevention: "สามารถรับประทานเสริมเพื่อสร้างภูมิคุ้มกันและปรับสมดุลระบบทางเดินอาหาร"
+            }
         ];
 
         let historyData = [];
         let currentScanResult = null;
         let isScanning = false;
-        
         const ADMIN_PASSWORD = "9999";
         const SUPER_ADMIN_PASSWORD = "nurse2568";
-        
-        let currentDeleteTargetId = null;
+        let currentDeleteDocId = null; 
         let failedAttempts = 0;
+
+        // ดึงข้อมูล Firebase
+        db.collection("scans").orderBy("timestamp", "desc").onSnapshot((snapshot) => {
+            historyData = [];
+            snapshot.forEach((doc) => {
+                historyData.push({ ...doc.data(), docId: doc.id });
+            });
+            updateHistoryUI(); 
+        });
+
+        // ระบบเลือกไฟล์
+        function handleFile(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const scaleSize = 500 / img.width; 
+                        canvas.width = 500;
+                        canvas.height = img.height * scaleSize;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7); 
+
+                        document.getElementById('preview-img').src = compressedDataUrl;
+                        document.getElementById('preview-img').classList.remove('hidden');
+                        document.getElementById('upload-ui').classList.add('hidden');
+                        document.getElementById('analyze-btn').disabled = false;
+                        document.getElementById('image-container').classList.replace('py-20', 'py-0');
+                    }
+                    img.src = e.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // ระบบสแกนและโชว์ผลวิเคราะห์
+        function startScanning() {
+            if(isScanning) return;
+            isScanning = true;
+            document.getElementById('image-container').classList.add('scanning');
+            const btn = document.getElementById('analyze-btn');
+            btn.disabled = true;
+            btn.innerText = "SCANNING...";
+            
+            setTimeout(() => {
+                isScanning = false;
+                document.getElementById('image-container').classList.remove('scanning');
+                document.getElementById('upload-section').classList.add('hidden');
+                
+                const info = pathogens[Math.floor(Math.random() * pathogens.length)];
+                
+                // ดึงข้อมูลมาทั้งหมดรวมถึง อาการ การรักษา การป้องกัน
+                currentScanResult = { 
+                    name: info.name, 
+                    detail: info.detail, 
+                    risk: info.risk,
+                    symptoms: info.symptoms,
+                    treatment: info.treatment,
+                    prevention: info.prevention,
+                    image: document.getElementById('preview-img').src
+                };
+
+                // ใส่ข้อมูลลงในหน้าจอโชว์ผล
+                document.getElementById('live-result-img').src = currentScanResult.image;
+                document.getElementById('live-result-name').innerText = currentScanResult.name;
+                document.getElementById('live-result-detail').innerText = currentScanResult.detail;
+                document.getElementById('live-result-symptoms').innerText = currentScanResult.symptoms;
+                document.getElementById('live-result-treatment').innerText = currentScanResult.treatment;
+                
+                const riskBadge = document.getElementById('live-result-risk');
+                riskBadge.innerText = currentScanResult.risk;
+                
+                if(currentScanResult.risk === 'CRITICAL') {
+                    riskBadge.className = 'px-3 py-1 rounded text-[11px] font-black tracking-widest bg-rose-100 text-rose-600 border border-rose-200';
+                } else if(currentScanResult.risk === 'WARNING') {
+                    riskBadge.className = 'px-3 py-1 rounded text-[11px] font-black tracking-widest bg-amber-100 text-amber-600 border border-amber-200';
+                } else {
+                    riskBadge.className = 'px-3 py-1 rounded text-[11px] font-black tracking-widest bg-emerald-100 text-emerald-600 border border-emerald-200';
+                }
+
+                document.getElementById('result-section').classList.remove('hidden');
+            }, 2000); 
+        }
+
+        function saveResult() {
+            if(currentScanResult) {
+                const btn = document.getElementById('btn-save');
+                btn.innerText = "กำลังบันทึก...";
+                btn.disabled = true;
+
+                currentScanResult.timestamp = firebase.firestore.FieldValue.serverTimestamp();
+
+                db.collection("scans").add(currentScanResult).then(() => {
+                    currentScanResult = null;
+                    resetScannerUI();
+                    showPage('history');
+                    btn.innerText = "บันทึกผลการสแกน";
+                    btn.disabled = false;
+                });
+            }
+        }
+
+        // ==========================================
+        // ฟังก์ชันใหม่: เปิดดูรายละเอียดแบบเต็ม (Modal)
+        // ==========================================
+        function openDetailModal(docId) {
+            // ค้นหาข้อมูลจาก historyData ด้วย docId
+            const item = historyData.find(d => d.docId === docId);
+            if(!item) return;
+
+            // นำข้อมูลไปใส่ใน Modal
+            document.getElementById('modal-img').src = item.image;
+            document.getElementById('modal-name').innerText = item.name;
+            document.getElementById('modal-detail').innerText = item.detail;
+            
+            // ใส่ข้อมูลที่เพิ่มมาใหม่ (ป้องกันบัคกรณีดึงของเก่าที่ไม่มีฟิลด์เหล่านี้)
+            document.getElementById('modal-symptoms').innerText = item.symptoms || "ไม่มีข้อมูล";
+            document.getElementById('modal-treatment').innerText = item.treatment || "ไม่มีข้อมูล";
+            document.getElementById('modal-prevention').innerText = item.prevention || "ไม่มีข้อมูล";
+
+            // จัดการสีป้ายกำกับ
+            const riskBadge = document.getElementById('modal-risk');
+            riskBadge.innerText = item.risk;
+            if(item.risk === 'CRITICAL') riskBadge.className = 'px-3 py-1 rounded-md text-[11px] font-black tracking-widest bg-rose-100 text-rose-600 border border-rose-200';
+            else if(item.risk === 'WARNING') riskBadge.className = 'px-3 py-1 rounded-md text-[11px] font-black tracking-widest bg-amber-100 text-amber-600 border border-amber-200';
+            else riskBadge.className = 'px-3 py-1 rounded-md text-[11px] font-black tracking-widest bg-emerald-100 text-emerald-600 border border-emerald-200';
+
+            // แสดง Modal
+            document.getElementById('detail-modal').classList.add('active');
+        }
+
+        function promptDelete(docId, event) {
+            event.stopPropagation(); // สำคัญมาก! ป้องกันไม่ให้คลิกปุ่มลบ แล้วเด้งไปเปิดหน้า Detail
+            currentDeleteDocId = docId; 
+            document.getElementById('delete-password').value = '';
+            document.getElementById('delete-error').classList.add('hidden');
+            
+            if (failedAttempts >= 5) {
+                document.getElementById('delete-title').innerText = "Super Admin Mode";
+                document.getElementById('delete-password').placeholder = "ใส่รหัสพยาบาล...";
+            } else {
+                document.getElementById('delete-title').innerText = "ลบข้อมูล?";
+                document.getElementById('delete-password').placeholder = "ใส่รหัสผ่าน...";
+            }
+            document.getElementById('delete-modal').classList.add('active');
+            setTimeout(() => document.getElementById('delete-password').focus(), 100);
+        }
+
+        function confirmDelete() {
+            const pwdInput = document.getElementById('delete-password').value;
+            const errorText = document.getElementById('delete-error');
+            const requiredPassword = (failedAttempts >= 5) ? SUPER_ADMIN_PASSWORD : ADMIN_PASSWORD;
+            
+            if (pwdInput === requiredPassword) {
+                closeModal('delete-modal');
+                failedAttempts = 0; 
+                document.getElementById('security-alert').classList.add('-translate-y-full'); 
+                db.collection("scans").doc(currentDeleteDocId).delete();
+            } else {
+                failedAttempts++;
+                if (failedAttempts >= 5) {
+                    errorText.innerText = "รหัสผิด! ระบบถูกล็อค";
+                    closeModal('delete-modal');
+                    document.getElementById('security-alert').classList.remove('-translate-y-full');
+                } else {
+                    errorText.innerText = `รหัสผิด! (${failedAttempts}/5)`;
+                    errorText.classList.remove('hidden');
+                }
+                document.getElementById('delete-password').value = ''; 
+                document.getElementById('delete-password').focus();
+            }
+        }
 
         function showPage(pageId) {
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -237,250 +414,54 @@
             document.getElementById('nav-scanner').className = pageId === 'scanner' ? "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm bg-emerald-50 text-emerald-700 font-bold" : "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-800";
         }
 
-        function handleFile(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    document.getElementById('preview-img').src = e.target.result;
-                    document.getElementById('preview-img').classList.remove('hidden');
-                    document.getElementById('upload-ui').classList.add('hidden');
-                    document.getElementById('analyze-btn').disabled = false;
-                    document.getElementById('image-container').classList.replace('py-20', 'py-0');
-                    document.getElementById('image-container').classList.remove('p-2');
-                }
-                reader.readAsDataURL(file);
-            }
-        }
-
-        function startScanning() {
-            if(isScanning) return;
-
-            // [ใหม่] ตรวจสอบว่ารูปนี้เคยถูกบันทึกลง History แล้วหรือยัง
-            const currentImgSrc = document.getElementById('preview-img').src;
-            const isDuplicate = historyData.some(item => item.image === currentImgSrc);
-            
-            if (isDuplicate) {
-                document.getElementById('duplicate-modal').classList.add('active');
-                return; // หยุดกระบวนการ ไม่ต้องสแกนซ้ำ
-            }
-
-            isScanning = true;
-            const btn = document.getElementById('analyze-btn');
-            const container = document.getElementById('image-container');
-            
-            btn.disabled = true;
-            btn.innerText = "SCANNING IN PROGRESS...";
-            btn.classList.add('bg-emerald-600', 'animate-pulse');
-            btn.classList.remove('bg-slate-900');
-            container.classList.add('scanning'); 
-
-            setTimeout(() => {
-                isScanning = false;
-                container.classList.remove('scanning');
-                document.getElementById('upload-section').classList.add('hidden');
-                
-                const info = pathogens[Math.floor(Math.random() * pathogens.length)];
-                currentScanResult = { ...info, image: document.getElementById('preview-img').src, time: new Date().toLocaleString('th-TH'), id: Date.now() };
-
-                document.getElementById('live-result-img').src = currentScanResult.image;
-                document.getElementById('live-result-name').innerText = currentScanResult.name;
-                document.getElementById('live-result-detail').innerText = currentScanResult.detail;
-                
-                const riskBadge = document.getElementById('live-result-risk');
-                riskBadge.innerText = currentScanResult.risk;
-                riskBadge.className = currentScanResult.risk === 'CRITICAL' ? 'bg-rose-100 text-rose-600 border border-rose-200' : 'bg-amber-100 text-amber-600 border border-amber-200';
-
-                document.getElementById('result-section').classList.remove('hidden');
-            }, 3000); 
-        }
-
-        function goToHistoryFromDuplicate() {
-            closeModal('duplicate-modal');
-            resetScannerUI();
-            showPage('history');
-        }
-
-        function saveAndAcknowledge() {
-            if(currentScanResult) {
-                historyData.unshift(currentScanResult);
-                updateHistoryUI();
-                currentScanResult = null;
-                resetScannerUI();
-                showPage('history');
-            }
-        }
-
-        function discardAndRetry() {
-            currentScanResult = null;
-            resetScannerUI();
-        }
-
         function resetScannerUI() {
             document.getElementById('file-input').value = "";
-            document.getElementById('preview-img').classList.add('hidden');
             document.getElementById('preview-img').src = "";
             document.getElementById('upload-ui').classList.remove('hidden');
-            document.getElementById('image-container').classList.replace('py-0', 'py-20');
-            document.getElementById('image-container').classList.add('p-2');
-            
-            const btn = document.getElementById('analyze-btn');
-            btn.disabled = true;
-            btn.innerText = "เริ่มกระบวนการวิเคราะห์ (INITIATE SCAN)";
-            btn.className = "w-full mt-8 bg-slate-900 text-white py-5 rounded-2xl font-bold text-lg hover:bg-emerald-600 hover:shadow-lg hover:shadow-emerald-200 transition-all duration-300 disabled:opacity-20 disabled:cursor-not-allowed";
-            
             document.getElementById('result-section').classList.add('hidden');
             document.getElementById('upload-section').classList.remove('hidden');
+            document.getElementById('analyze-btn').disabled = true;
+            document.getElementById('analyze-btn').innerText = "เริ่มวิเคราะห์ (INITIATE SCAN)";
         }
 
         function updateHistoryUI() {
             const container = document.getElementById('history-container');
-            const emptyMsg = document.getElementById('empty-msg');
-            
             if (historyData.length === 0) {
-                container.innerHTML = "";
-                container.appendChild(emptyMsg);
-                emptyMsg.classList.remove('hidden');
+                container.innerHTML = `<div class="col-span-full py-20 text-center text-slate-400 bg-white/40 rounded-3xl border border-dashed border-slate-200 mt-4"><p class="font-bold uppercase tracking-widest text-sm">ยังไม่มีข้อมูลในระบบ</p></div>`;
                 document.getElementById('scan-count').innerText = 0;
                 return;
             }
-
-            container.innerHTML = "";
             document.getElementById('scan-count').innerText = historyData.length;
+            container.innerHTML = "";
+            
+            historyData.forEach((item) => {
+                let badgeClass = '';
+                if(item.risk === 'CRITICAL') badgeClass = 'bg-rose-50 text-rose-600 border border-rose-100';
+                else if(item.risk === 'WARNING') badgeClass = 'bg-amber-50 text-amber-600 border border-amber-100';
+                else badgeClass = 'bg-emerald-50 text-emerald-600 border border-emerald-100';
 
-            historyData.forEach(item => {
-                const badgeColor = item.risk === 'CRITICAL' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-amber-50 text-amber-600 border border-amber-100';
-                
+                // เพิ่ม onclick ที่กรอบการ์ด ให้กดปุ๊บเปิดหน้าต่าง Detail โชว์ทันที (cursor-pointer เพิ่มให้รู้ว่ากดได้)
                 const card = `
-                    <div onclick="openDetailModal(${item.id})" class="bg-white rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 overflow-hidden hover:shadow-[0_10px_40px_rgba(16,185,129,0.1)] hover:-translate-y-2 transition-all duration-300 cursor-pointer group flex flex-col h-full relative">
-                        
-                        <button onclick="promptDelete(${item.id}, event)" class="absolute top-4 right-4 bg-white/80 hover:bg-rose-600 text-slate-400 hover:text-white p-2.5 rounded-full transition-colors z-10 shadow-sm backdrop-blur">
+                    <div onclick="openDetailModal('${item.docId}')" class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden relative hover:shadow-lg hover:-translate-y-1 cursor-pointer transition-all duration-300">
+                        <button onclick="promptDelete('${item.docId}', event)" class="absolute top-4 right-4 bg-white/80 hover:bg-rose-600 text-slate-400 hover:text-white p-2.5 rounded-full z-10 shadow-sm transition-colors">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                         </button>
-
-                        <div class="relative h-48 overflow-hidden bg-slate-50">
-                            <img src="${item.image}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-in-out">
+                        <div class="h-40 overflow-hidden bg-slate-50"><img src="${item.image}" class="w-full h-full object-cover"></div>
+                        <div class="p-6">
+                            <span class="${badgeClass} px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest">${item.risk}</span>
+                            <h3 class="font-black italic text-slate-800 text-xl mt-3 mb-1 truncate">${item.name}</h3>
+                            <p class="text-slate-500 text-xs line-clamp-2">${item.detail}</p>
                         </div>
-                        <div class="p-6 flex-1 flex flex-col">
-                            <span class="self-start ${badgeColor} px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest mb-3">${item.risk}</span>
-                            <h3 class="font-black italic text-slate-800 text-xl leading-tight mb-2">${item.name}</h3>
-                            <p class="text-slate-500 text-xs line-clamp-2 flex-1">${item.detail}</p>
-                        </div>
-                    </div>
-                `;
+                    </div>`;
                 container.insertAdjacentHTML('beforeend', card);
             });
         }
 
-        function openDetailModal(id) {
-            const item = historyData.find(d => d.id === id);
-            if (item) {
-                document.getElementById('modal-img').src = item.image;
-                document.getElementById('modal-name').innerText = item.name;
-                document.getElementById('modal-detail').innerText = item.detail;
-                
-                const riskBadge = document.getElementById('modal-risk');
-                riskBadge.innerText = item.risk;
-                riskBadge.className = `self-start px-3 py-1 rounded-md text-[10px] font-black tracking-widest mb-4 ${item.risk === 'CRITICAL' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`;
-                
-                document.getElementById('details-modal').classList.add('active');
-            }
-        }
-
-        function promptDelete(id, event) {
-            event.stopPropagation(); 
-            currentDeleteTargetId = id;
-            
-            const pwdInput = document.getElementById('delete-password');
-            const errorText = document.getElementById('delete-error');
-            const modalBox = document.getElementById('delete-modal-box');
-            
-            pwdInput.value = '';
-            errorText.classList.add('hidden');
-            modalBox.classList.remove('animate-shake');
-            
-            if (failedAttempts >= 5) {
-                document.getElementById('delete-title').innerText = "ปลดล็อกและลบข้อมูล (Super Admin)";
-                document.getElementById('delete-subtitle').innerText = "ระบบถูกล็อก กรุณาใส่รหัสผ่านระดับสูง";
-                pwdInput.placeholder = "ใส่รหัสผ่าน Super Admin...";
-                document.getElementById('delete-icon-bg').className = "w-16 h-16 bg-slate-900 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-4 transition-colors";
-                document.getElementById('btn-confirm-delete').className = "w-1/2 bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-black shadow-lg shadow-slate-200 transition-all";
-            } else {
-                document.getElementById('delete-title').innerText = "ลบข้อมูลประวัติ?";
-                document.getElementById('delete-subtitle').innerText = "กรุณาใส่รหัสผ่านผู้ใช้งานเพื่อยืนยันการลบข้อมูล";
-                pwdInput.placeholder = "ใส่รหัสผ่าน...";
-                document.getElementById('delete-icon-bg').className = "w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4 transition-colors";
-                document.getElementById('btn-confirm-delete').className = "w-1/2 bg-rose-600 text-white py-3 rounded-xl font-bold hover:bg-rose-700 shadow-lg shadow-rose-200 transition-all";
-            }
-            
-            document.getElementById('delete-modal').classList.add('active');
-            setTimeout(() => pwdInput.focus(), 100);
-        }
-
-        // [แก้บัค] ยืนยันรหัสและปิดแบบไม่ค้าง
-        function confirmDelete() {
-            const pwdInput = document.getElementById('delete-password').value;
-            const modalBox = document.getElementById('delete-modal-box');
-            const errorText = document.getElementById('delete-error');
-            
-            const requiredPassword = (failedAttempts >= 5) ? SUPER_ADMIN_PASSWORD : ADMIN_PASSWORD;
-            
-            if (pwdInput === requiredPassword) {
-                // ปิด Modal ทันทีที่รหัสถูกต้อง (ไม่มีค้าง)
-                closeModal('delete-modal');
-                
-                // รีเซ็ตสถานะและซ่อนแถบแจ้งเตือน
-                failedAttempts = 0; 
-                document.getElementById('security-alert').classList.add('-translate-y-full'); 
-                
-                // จัดการลบข้อมูล
-                historyData = historyData.filter(item => item.id !== currentDeleteTargetId);
-                updateHistoryUI();
-                
-                // เคลียร์ค่าที่พิมพ์ค้างไว้
-                currentDeleteTargetId = null;
-                document.getElementById('delete-password').value = '';
-                errorText.classList.add('hidden');
-
-            } else {
-                failedAttempts++;
-                
-                modalBox.classList.remove('animate-shake');
-                void modalBox.offsetWidth; 
-                modalBox.classList.add('animate-shake');
-                
-                if (failedAttempts >= 5) {
-                    errorText.innerText = "รหัสผ่าน Super Admin ไม่ถูกต้อง!";
-                } else {
-                    errorText.innerText = `รหัสผ่านไม่ถูกต้อง! (ผิด ${failedAttempts}/5 ครั้ง)`;
-                }
-                
-                errorText.classList.remove('hidden');
-                document.getElementById('delete-password').value = ''; 
-                document.getElementById('delete-password').focus();
-
-                // ปิดหน้าต่างแล้วโชว์แถบเตือน เฉพาะเมื่อเพิ่งผิดครบครั้งที่ 5 พอดี
-                if (failedAttempts === 5) {
-                    closeModal('delete-modal');
-                    document.getElementById('security-alert').classList.remove('-translate-y-full');
-                }
-            }
-        }
-
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('active');
-        }
-
-        function dismissSecurityAlert() {
-            document.getElementById('security-alert').classList.add('-translate-y-full');
-        }
+        function closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); }
+        function dismissSecurityAlert() { document.getElementById('security-alert').classList.add('-translate-y-full'); }
+        function discardAndRetry() { currentScanResult = null; resetScannerUI(); }
+        document.getElementById('delete-password').addEventListener("keypress", function(e) { if(e.key === "Enter") confirmDelete(); });
         
-        document.getElementById('delete-password').addEventListener("keypress", function(event) {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                confirmDelete();
-            }
-        });
     </script>
 </body>
 </html>
